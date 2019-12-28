@@ -45,6 +45,7 @@ from .. import log, commands, tools, perf_timer
 from .._utils import system, shared_globals, thread_pool, terminfo, ordered_set, FormatTime, queue, dag, MultiBreak, PlatformString, settings_manager
 from .._utils.decorators import TypeChecked
 from .._utils.string_abc import String
+from ..tools.common.tool_traits import HasDebugLevel, HasOptimizationLevel
 
 if sys.version_info[0] >= 3:
 	_typeType = type
@@ -616,6 +617,19 @@ def Run():
 
 		tools.InitTools()
 
+		#Create the default targets...
+		with csbuild.Target("release"):
+			csbuild.SetDebugLevel(HasDebugLevel.DebugLevel.Disabled)
+			csbuild.SetOptimizationLevel(HasOptimizationLevel.OptimizationLevel.Max)
+
+		with csbuild.Target("debug"):
+			csbuild.SetDebugLevel(HasDebugLevel.DebugLevel.EmbeddedSymbols)
+			csbuild.SetOptimizationLevel(HasOptimizationLevel.OptimizationLevel.Disabled)
+
+		with csbuild.Target("fastdebug"):
+			csbuild.SetDebugLevel(HasDebugLevel.DebugLevel.EmbeddedSymbols)
+			csbuild.SetOptimizationLevel(HasOptimizationLevel.OptimizationLevel.Max)
+
 		if mainFile is not None:
 			mainFileDir = os.path.abspath(os.path.dirname(mainFile))
 			if mainFileDir:
@@ -637,7 +651,7 @@ def Run():
 		i = 1
 		j = 0
 
-		maxcols = min(math.floor(len(shared_globals.sortedProjects) / 4), 4)
+		maxcols = 4#min(math.floor(len(shared_globals.sortedProjects) / 4), 4)
 
 		for proj in shared_globals.sortedProjects:
 			projtable[j].append(proj.name)
@@ -670,9 +684,11 @@ def Run():
 		i = 1
 		j = 0
 
-		maxcols = min(math.floor(len(shared_globals.allTargets) / 4), 4)
+		maxcols = 4#min(math.floor(len(shared_globals.allTargets) / 4), 4)
 
-		for targ in shared_globals.allTargets:
+		for targ in sorted(shared_globals.allTargets):
+			if targ == csbuild.currentPlan.defaultTarget:
+				targ += " (default)"
 			targtable[j].append(targ)
 			if i < maxcols:
 				i += 1
@@ -696,17 +712,59 @@ def Run():
 					epilog += "  "
 				epilog += "\n"
 
+
+		epilog += "\nAvailable solution generators:\n\n"
+
+		gentable = [[]]
+		i = 1
+		j = 0
+
+		maxcols = 4#min(math.floor(len(shared_globals.allGenerators) / 4), 4)
+
+		for gen in sorted(shared_globals.allGenerators.keys()):
+			gentable[j].append(gen)
+			if i < maxcols:
+				i += 1
+			else:
+				gentable.append([])
+				i = 1
+				j += 1
+
+		if gentable:
+			maxlens = [15] * len(gentable[0])
+			for col in gentable:
+				for subindex, item in enumerate(col):
+					maxlens[subindex] = max(maxlens[subindex], len(item))
+
+			for col in gentable:
+				for subindex, item in enumerate(col):
+					epilog += "  "
+					epilog += item
+					for _ in range(maxlens[subindex] - len(item)):
+						epilog += " "
+					epilog += "  "
+				epilog += "\n"
+
 		parser = shared_globals.parser = argparse.ArgumentParser(
 			prog = mainFile, epilog = epilog, formatter_class = argparse.RawDescriptionHelpFormatter)
 
 		parser.add_argument('--version', action = "store_true", help = "Print version information and exit")
 
 		group = parser.add_mutually_exclusive_group()
-		group.add_argument('-t', '--target', action='append', help = 'Target(s) for build', default=[])
+		group.add_argument('-t', '--target', action='append', help = 'Target(s) for build. (May be specified multiple times.)', default=[])
 		group.add_argument('--at', "--all-targets", action = "store_true", help = "Build all targets")
 
 		parser.add_argument("-p", "--project",
-							action="append", help = "Build only the specified project. May be specified multiple times.")
+							action="append", help = "Build only the specified project. (May be specified multiple times.)",)
+
+		group = parser.add_mutually_exclusive_group()
+		group.add_argument('-o', '--toolchain', help = "Toolchain(s) to use for compiling. (May be specified multiple times.)",
+			default=[], action = "append")
+		group.add_argument("--ao", '--all-toolchains', help="Build with all toolchains", action = "store_true")
+
+		group = parser.add_mutually_exclusive_group()
+		group.add_argument("-a", "--architecture", "--arch", help = 'Architecture(s) to compile for each toolchain. (May be specified multiple times.)', action = "append",)
+		group.add_argument("--aa", "--all-architectures", "--all-arch", action = "store_true", help = "Build all architectures supported by this toolchain")
 
 		group = parser.add_mutually_exclusive_group()
 		group.add_argument('-c', '--clean', action = "store_true", help = 'Clean the target build')
@@ -739,20 +797,11 @@ def Run():
 		#parser.add_argument('--libdir', help = "install location for libraries (default {prefix}/lib)", action = "store")
 		#parser.add_argument('--incdir', help = "install prefix (default {prefix}/include)", action = "store")
 
-		group = parser.add_mutually_exclusive_group()
-		group.add_argument('-o', '--toolchain', help = "Toolchain to use for compiling.",
-			default=[], action = "append")
-		group.add_argument("--ao", '--all-toolchains', help="Build with all toolchains", action = "store_true")
-
-		group = parser.add_mutually_exclusive_group()
 
 		#for toolchainName, toolchainArchStrings in shared_globals.allToolchainArchStrings.items():
 		#	archStringLong = "--" + toolchainArchStrings[0]
 		#	archStringShort = "--" + toolchainArchStrings[1]
 		#	parser.add_argument(archStringLong, archStringShort, help = "Architecture to compile for the {} toolchain.".format(toolchainName), action = "append")
-
-		group.add_argument("-a", "--architecture", "--arch", help = 'Architecture to compile for each toolchain.', action = "append")
-		group.add_argument("--aa", "--all-architectures", "--all-arch", action = "store_true", help = "Build all architectures supported by this toolchain")
 
 		parser.add_argument("--stop-on-error", help = "Stop compilation after the first error is encountered.", action = "store_true")
 		#parser.add_argument('--no-precompile', help = "Disable precompiling globally, affects all projects",
@@ -842,16 +891,6 @@ def Run():
 			shared_globals.colorSupported = False
 		else:
 			shared_globals.colorSupported = terminfo.TermInfo.SupportsColor()
-
-		#Create the default targets...
-		with csbuild.Target("release"):
-			pass
-
-		with csbuild.Target("debug"):
-			pass
-
-		with csbuild.Target("fastdebug"):
-			pass
 
 		if args.generate_solution:
 

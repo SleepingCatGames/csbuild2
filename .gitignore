@@ -11,5 +11,6 @@ dist
 
 # Specific files
 failedLints.txt
+failedLints_*.txt
 result.xml
 MANIFEST

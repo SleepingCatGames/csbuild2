@@ -312,6 +312,7 @@ class Ps3SpuConverter(Ps3BaseTool, HasOptimizationLevel):
 		:type inputFile: input_file.InputFile
 		:return: tuple of files created by the tool - all files must have an extension in the outputFiles list
 		:rtype: tuple[str]
+		:raises csbuild.BuildFailureException: if the build fails
 		"""
 		log.Build(
 			"Converting SPU binary {} ({}-{}-{})...",

@@ -120,7 +120,7 @@ with perf_timer.PerfTimer("csbuild module init"):
 						rets.append(func.__get__(tool)(*args, **kwargs))
 			if len(rets) == 1:
 				return rets[0]
-			elif len(rets) > 1:
+			if len(rets) > 1:
 				return MultiDataContext(rets)
 			return None
 
@@ -284,7 +284,7 @@ with perf_timer.PerfTimer("csbuild module init"):
 		global _standardArchName
 		if _standardArchName is None:
 			def _is64Bit():
-				return True if platform.architecture()[0].lower() == "64bit" else False
+				return platform.architecture()[0].lower() == "64bit"
 
 			x86Archs = ["x64", "x86_64", "amd64", "x86", "i386", "i686"]
 			ppcArchs = ["powerpc", "ppc64"]
@@ -363,14 +363,16 @@ with perf_timer.PerfTimer("csbuild module init"):
 
 		currentPlan.EnterContext(("toolchain", (name,)))
 
-		checkers = kwargs.get("checkers", {})
-		if checkers:
-			currentPlan.UpdateDict("checkers", checkers)
+		try:
+			checkers = kwargs.get("checkers", {})
+			if checkers:
+				currentPlan.UpdateDict("checkers", checkers)
 
-		currentPlan.SetValue("tools", ordered_set.OrderedSet(tools))
-		currentPlan.SetValue("_tempToolchain", toolchain.Toolchain({}, *tools, runInit=False, checkers=checkers))
-		currentPlan.defaultArchitectureMap[name] = defaultArchitecture
-		currentPlan.LeaveContext()
+			currentPlan.SetValue("tools", ordered_set.OrderedSet(tools))
+			currentPlan.SetValue("_tempToolchain", toolchain.Toolchain({}, *tools, runInit=False, checkers=checkers))
+			currentPlan.defaultArchitectureMap[name] = defaultArchitecture
+		finally:
+			currentPlan.LeaveContext()
 
 		for tool in tools:
 			if tool.supportedArchitectures is not None:

@@ -119,6 +119,7 @@ class JavaCompilerBase(JavaToolBase):
 	################################################################################
 
 	def _getEnv(self, project):
+		"""Returns an array of environment variables to be passed to the running commands"""
 		_ignore(project)
 		return None
 

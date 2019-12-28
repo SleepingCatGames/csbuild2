@@ -184,7 +184,10 @@ class ThreadPool(object):
 							else:
 								nargs = len(argspec[0]) - len(callback.func.args)
 						else:
-							argspec = inspect.getargspec(callback) # pylint: disable=deprecated-method
+							try:
+								argspec = inspect.getfullargspec(callback)
+							except AttributeError:
+								argspec = inspect.getargspec(callback) # pylint: disable=deprecated-method
 							if argspec[1]:
 								nargs = -1
 							else:

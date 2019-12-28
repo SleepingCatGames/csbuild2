@@ -157,11 +157,8 @@ class FunctionalTest(TestCase):
 	def setUp(self, outDir="out", intermediateDir="intermediate", cleanAtEnd=True, cleanArgs=None): #pylint: disable=arguments-differ
 		self._prevdir = os.getcwd()
 
-		if os.getenv(PlatformString("CSBUILD_RUNNING_THROUGH_PYTHON_UNITTEST")) != PlatformString("1"):
-			module = __import__(self.__class__.__module__)
-			path = os.path.dirname(module.__file__)
-		else:
-			path = os.path.dirname(self.__class__.__module__.replace('.', os.path.sep))
+		module = sys.modules[self.__class__.__module__]
+		path = os.path.dirname(module.__file__)
 
 		self.mtx = _namedMutex(os.path.join(path, "lock"))
 		self.mtx.acquire()
@@ -222,7 +219,7 @@ class FunctionalTest(TestCase):
 		log.SetCallbackQueue(callbackQueue)
 
 		class _shared(object):
-			ret = None
+			ret = (1, "", "")
 
 		def _runCommand():
 			cmd = [sys.executable, os.path.abspath("make.py")]

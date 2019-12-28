@@ -77,14 +77,14 @@ class VsBasePlatformHandler(object):
 		self._addXmlNode = ET.SubElement
 
 	@staticmethod
-	def GetVisualStudioPlatformName(): # pylint: disable=redundant-returns-doc
+	def GetVisualStudioPlatformName():
 		"""
 		Get the name that is recognizeable by Visual Studio for the current platform.
 
 		:return: Visual Studio platform name.
 		:rtype: str
 		"""
-		pass
+		return ""
 
 	@staticmethod
 	def GetOutputExtensionIfDebuggable(projectOutputType): # pylint: disable=redundant-returns-doc

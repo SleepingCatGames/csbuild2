@@ -32,6 +32,7 @@ import sys
 import traceback
 import threading
 import re
+import pylint
 
 from . import testcase
 from .. import log
@@ -67,8 +68,10 @@ class TestPylint(testcase.TestCase):
 			data = ansiEscape.sub('', data)
 			for line in data.splitlines():
 				match = re.match(R".:\s*(\d+),\s*\d+: (.+)", line)
+				if not match:
+					match = re.match(R".+:(\d+):\d+: (.+)", line)
 				if match:
-					out.append('  File "{}", line {}, in pylint\n    {}'.format(module, match.group(1), match.group(2)))
+					out.append('  File "{}", line {}, in pylint\n    {}'.format(os.path.abspath(module), match.group(1), match.group(2)))
 				else:
 					# Recent versions of pylint annoyingly print these lines about the config file to stderr and while
 					# there is an option internally to silence these messages, there is no switch available externally
@@ -107,13 +110,14 @@ class TestPylint(testcase.TestCase):
 				pool.Stop()
 
 		resultMTime = 0
-		if os.access("failedLints.txt", os.F_OK):
-			resultMTime = os.path.getmtime("failedLints.txt")
+		failedLintsFilename = "failedLints_python{}.{}.{}_pylint{}.txt".format(sys.version_info[0], sys.version_info[1], sys.version_info[2], pylint.__version__)
+		if os.access(failedLintsFilename, os.F_OK):
+			resultMTime = os.path.getmtime(failedLintsFilename)
 
 		failedLints = set()
 
-		if os.access("failedLints.txt", os.F_OK):
-			with open("failedLints.txt", "r") as f:
+		if os.access(failedLintsFilename, os.F_OK):
+			with open(failedLintsFilename, "r") as f:
 				failedLints = set(f.readlines())
 
 
@@ -228,7 +232,7 @@ class TestPylint(testcase.TestCase):
 
 		log.SetCallbackQueue(None)
 
-		with open("failedLints.txt", "w") as f:
+		with open(failedLintsFilename, "w") as f:
 			f.write("\n".join(failedLints))
 
 		if failedLints:

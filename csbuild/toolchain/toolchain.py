@@ -804,7 +804,7 @@ class Toolchain(object):
 									with Use(dummy):
 										return getattr(self, name)
 
-							if lastClass:
+							if lastClass: # pylint: disable=no-else-raise
 								# If we only have one class to look at, we can shortcut a little bit.
 								# Also we can give access to instance methods and instance data that we can't give access to with
 								# multiple classes in view.
@@ -838,10 +838,10 @@ class Toolchain(object):
 									if isinstance(val, property):
 										# pylint: disable=no-member
 										return val.__get__(self)
-									elif isinstance(val, (staticmethod, classmethod)):
+									if isinstance(val, (staticmethod, classmethod)):
 										# pylint: disable=no-member
 										return val.__get__(cls)
-									elif isinstance(val, (types.FunctionType, types.MethodType)):
+									if isinstance(val, (types.FunctionType, types.MethodType)):
 										assert runInit, "Cannot call non-static methods of class {} from this context!".format(cls.__name__)
 										return types.MethodType(val, self)
 									return val
@@ -911,7 +911,7 @@ class Toolchain(object):
 												"Only staticmethods and classmethods are automatically bundled, non-static methods must be called with toolchain.Tool(FooTool).BarMethod()"
 												.format(name)
 											)
-										elif not isinstance(func, staticmethod) and not isinstance(func, classmethod):
+										if not isinstance(func, staticmethod) and not isinstance(func, classmethod):
 											hasNonFunc = True
 
 								if hasNonFunc:

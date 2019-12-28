@@ -125,10 +125,9 @@ class TermInfo(object):
 				return right - left
 			return 0
 
-		else:
-			if TermInfo._cursesValid:
-				return curses.tigetnum('cols')
-			return 0
+		if TermInfo._cursesValid:
+			return curses.tigetnum('cols')
+		return 0
 
 
 	@staticmethod
@@ -141,10 +140,9 @@ class TermInfo(object):
 		"""
 		if platform.system() == "Windows":
 			return TermInfo._colorSupported
-		else:
-			if TermInfo._cursesValid:
-				return curses.tigetnum("colors") >= 8
-			return False
+		if TermInfo._cursesValid:
+			return curses.tigetnum("colors") >= 8
+		return False
 
 
 	@staticmethod
