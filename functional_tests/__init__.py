@@ -35,7 +35,7 @@ def load_tests(loader, tests, _pattern): #pylint: disable=invalid-name
 
 	for testdir in os.listdir("functional_tests"):
 		if os.path.isdir(os.path.join("functional_tests", testdir)):
-			modulepath = os.path.join("functional_tests", testdir, "tests.py")
+			modulepath = os.path.abspath(os.path.join("functional_tests", testdir, "tests.py"))
 			if os.access(modulepath, os.F_OK):
 				tests.addTests(loader.loadTestsFromModule(imp.load_source("functional_tests.{}.tests".format(testdir), modulepath)))
 

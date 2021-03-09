@@ -547,7 +547,7 @@ class PerfTimer(object):
 
 		if reportMode == ReportMode.HTML:
 			if output is None:
-				output = os.path.basename(os.path.splitext(sys.modules["__main__"].__file__)[0] + "_PERF.html")
+				output = os.path.join(os.path.dirname(sys.modules["__main__"].__file__), os.path.basename(os.path.splitext(sys.modules["__main__"].__file__)[0] + "_PERF.html"))
 
 			with open(output, "w") as f:
 				#pylint: disable=missing-docstring
@@ -720,8 +720,8 @@ class PerfTimer(object):
 				for threadId, report in threadreports.items():
 					if threadId == threading.current_thread().ident:
 						continue
-					else:
-						_printReportHtml(report, "Worker Thread {}".format(threadId))
+
+					_printReportHtml(report, "Worker Thread {}".format(threadId))
 
 				_printReportHtml(threadreports[threading.current_thread().ident], "Main Thread")
 				if len(threadreports) != 1:
@@ -847,8 +847,8 @@ class PerfTimer(object):
 			for threadId, report in threadreports.items():
 				if threadId == threading.current_thread().ident:
 					continue
-				else:
-					_printReport(report, "Worker Thread {}".format(threadId))
+
+				_printReport(report, "Worker Thread {}".format(threadId))
 
 			_printReport(threadreports[threading.current_thread().ident], "Main Thread")
 			if len(threadreports) != 1:

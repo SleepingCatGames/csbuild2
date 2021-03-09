@@ -67,7 +67,8 @@ class RunMode(object):
 	Help = 1
 	Version = 2
 	GenerateSolution = 3
-	QUALAP = 4
+	GenerateDependencyGraph = 4
+	QUALAP = 5
 
 runMode = None
 
@@ -134,6 +135,18 @@ class InMemoryOnlySettings(object):
 		:type value: any
 		"""
 		self.dict[key] = value
+
+	def Persist(self):
+		"""
+		NOP for this class.
+		"""
+		pass
+
+	def Clear(self):
+		"""
+		NOP for this class.
+		"""
+		pass
 
 	def Delete(self, key):
 		"""

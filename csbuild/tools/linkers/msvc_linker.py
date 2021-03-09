@@ -81,7 +81,7 @@ class MsvcLinker(MsvcToolBase, LinkerBase):
 		possibleFiles = ["{}.exp".format(outputPath), "{}.lib".format(outputPath)]
 		outputFiles.extend([filename for filename in possibleFiles if os.access(filename, os.F_OK)])
 
-		return tuple(outputFiles)
+		return tuple(set(outputFiles))
 
 	def _getCommand(self, project, inputFiles):
 		if project.projectType == csbuild.ProjectType.StaticLibrary:
@@ -106,9 +106,9 @@ class MsvcLinker(MsvcToolBase, LinkerBase):
 		return [cmdExe, "@{}".format(responseFile.filePath)]
 
 	def _findLibraries(self, project, libs):
-		allLibraryDirectories = [x for x in self._libraryDirectories] + self.vcvarsall.libPaths
+		allLibraryDirectories = list(self._libraryDirectories) + self.vcvarsall.libPaths
 
-		return FindLibraries([x for x in libs], allLibraryDirectories, [".lib"])
+		return FindLibraries(libs, allLibraryDirectories, [".lib"])
 
 	def _getOutputExtension(self, projectType):
 		# These are extensions of the files that can be output from the linker or librarian.
@@ -177,7 +177,7 @@ class MsvcLinker(MsvcToolBase, LinkerBase):
 			"odbc32.lib",
 			"odbccp32.lib",
 		]
-		args.extend([lib for lib in self._actualLibraryLocations.values()])
+		args.extend(list(self._actualLibraryLocations.values()))
 		return args
 
 	def _getOutputFileArgs(self, project):

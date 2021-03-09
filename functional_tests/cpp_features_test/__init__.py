@@ -19,47 +19,10 @@
 # SOFTWARE.
 
 """
-.. module:: make
-	:synopsis: Makefile for this test
+.. package:: cpp_features_test
+	:synopsis: Basic test of c++ feature toggles
 
 .. moduleauthor:: Jaedyn K. Draper
 """
 
 from __future__ import unicode_literals, division, print_function
-
-import csbuild
-from csbuild.toolchain import Tool
-
-class NullClass(Tool):
-	"""Empty tool just to make things work."""
-	inputFiles = {".foo"}
-	outputFiles = {".bar"}
-	supportedArchitectures=None
-	inputFiles=None
-	outputFiles={""}
-
-	def Run(self, inputProject, inputFile):
-		return ""
-
-csbuild.RegisterToolchain("msvc", "dummy", NullClass)
-csbuild.RegisterToolchain("gcc", "dummy", NullClass)
-
-with csbuild.Project("hello_world_2", "./", ["hello_world"]):
-	with csbuild.Target("debug"):
-		csbuild.SetOutput("hello_world_2_debug")
-
-	with csbuild.Target("release"):
-		csbuild.SetOutput("hello_world_2")
-
-with csbuild.Project("hello_world_3", "./", ["hello_world"]):
-	with csbuild.Target("debug"):
-		csbuild.SetOutput("hello_world_3_debug")
-
-	with csbuild.Target("release"):
-		csbuild.SetOutput("hello_world_3")
-
-with csbuild.Project("hello_world", "./"):
-	with csbuild.Target("release"):
-		csbuild.SetOutput("hello_world_release")
-
-	csbuild.SetOutput("hello_world")

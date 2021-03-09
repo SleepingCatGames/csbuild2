@@ -27,7 +27,6 @@
 
 from __future__ import unicode_literals, division, print_function
 
-import os
 import csbuild
 
 from abc import ABCMeta, abstractmethod
@@ -122,10 +121,12 @@ class AssemblerBase(HasDefines, HasIncludeDirectories):
 		:type inputFile: input_file.InputFile
 		:return: tuple of files created by the tool - all files must have an extension in the outputFiles list
 		:rtype: tuple[str]
+
+		:raises BuildFailureException: Build process exited with an error.
 		"""
 		log.Build(
 			"Assembling {} ({}-{}-{})...",
-			os.path.basename(inputFile.filename),
+			inputFile,
 			inputProject.toolchainName,
 			inputProject.architectureName,
 			inputProject.targetName

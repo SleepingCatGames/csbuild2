@@ -61,7 +61,9 @@ def _printProgressBar():
 			textSize = 42
 
 			perc = 1 if totalBuilds == 0 else float(completeBuilds)/float(totalBuilds)
-			if perc > _lastPerc:
+			if perc == 0:
+				_sep = "-"
+			elif perc > _lastPerc:
 				_sep = ">"
 			elif perc < _lastPerc:
 				_sep = "<"
@@ -148,6 +150,11 @@ def _printProgressBar():
 			if shared_globals.colorSupported:
 				sys.stdout.flush()
 				terminfo.TermInfo.ResetColor()
+
+			if perc == 0:
+				if shared_globals.colorSupported:
+					sys.stdout.flush()
+					terminfo.TermInfo.SetColor(Color.DYELLOW)
 
 			sys.stdout.write(_sep)
 
@@ -261,11 +268,10 @@ def _writeLog(color, level, msg, destination=sys.stdout):
 						match = _tagNameMatch.match(piece)
 						if match or piece == "</&>":
 							continue
-						else:
-							try:
-								destination.write(piece)
-							except UnicodeEncodeError:
-								destination.write(piece.encode("ascii", "replace").decode("ascii", "replace"))
+						try:
+							destination.write(piece)
+						except UnicodeEncodeError:
+							destination.write(piece.encode("ascii", "replace").decode("ascii", "replace"))
 			else:
 				try:
 					destination.write(msg)
@@ -361,7 +367,7 @@ def _formatMsg(msg, *args, **kwargs):
 
 	if not isinstance(msg, BytesType) and not isinstance(msg, StrType):
 		return repr(msg)
-	elif args or kwargs:
+	if args or kwargs:
 		return msg.format(*args, **kwargs)
 	return msg
 

@@ -565,7 +565,9 @@ class Toolchain(object):
 					@TypeChecked(tool=(_typeType, _classType))
 					def DeactivateTool(self, tool):
 						"""
-						Remove the specified tool from the active tool list
+						Remove the specified tool from the active tool list. This is used internally when processing
+						null tools to ensure they don't get processed multiple times. You should NOT use this in a
+						makefile - instead, you should use RemoveTool
 
 						:param tool: tool to remove
 						:type tool: type
@@ -737,6 +739,27 @@ class Toolchain(object):
 
 						object.__setattr__(self, "__class__", type(PlatformString("Toolchain"), tuple(_classTrackr.classes), dict(ToolchainTemplate.__dict__)))
 
+					@TypeChecked(tool=(_typeType, _classType))
+					def RemoveTool(self, tool):
+						"""
+						Removes a tool from the toolchain. This can be used in a makefile to remove tools within
+						certain contexts, such as on a specific platform, or to remove default tools, such as
+						the built-in C++ linker tools.
+
+						:param tool: Class inheriting from Tool
+						:type tool: type
+						"""
+						assert not runInit, "RemoveTool can't be called from this context"
+						assert tool in _classTrackr.classes, "Tool {} has not been added".format(tool)
+
+						from .. import currentPlan
+						currentPlan.AddToSet("disabledTools", tool)
+
+						_classTrackr.classes.remove(tool)
+
+						object.__setattr__(self, "__class__", type(PlatformString("Toolchain"), tuple(_classTrackr.classes), dict(ToolchainTemplate.__dict__)))
+
+
 					@TypeChecked(extension=String, checker=CompileChecker)
 					def AddChecker(self, extension, checker):
 						"""
@@ -838,10 +861,10 @@ class Toolchain(object):
 									if isinstance(val, property):
 										# pylint: disable=no-member
 										return val.__get__(self)
-									elif isinstance(val, (staticmethod, classmethod)):
+									if isinstance(val, (staticmethod, classmethod)):
 										# pylint: disable=no-member
 										return val.__get__(cls)
-									elif isinstance(val, (types.FunctionType, types.MethodType)):
+									if isinstance(val, (types.FunctionType, types.MethodType)):
 										assert runInit, "Cannot call non-static methods of class {} from this context!".format(cls.__name__)
 										return types.MethodType(val, self)
 									return val
@@ -849,101 +872,101 @@ class Toolchain(object):
 								if hasattr(object, name) or hasattr(ToolClass, name):
 									return object.__getattribute__(self, name)
 								raise AttributeError("'{}' object has no attribute '{}'".format(cls.__name__, name))
-							else:
-								# For public variables we want to return a wrapper function that calls all
-								# matching functions. This should definitely be a function. If it's not a function,
-								# things will not work.
-								def _runMultiFunc(*args, **kwargs):
-									functions = {}
 
-									# Iterate through all classes and collect functions that match this name
-									# We'll keep a list of all the functions that match, but only call each matching
-									# function once. And when we call it we'll use the most base class we find that
-									# has it - which should be the one that defined it - and only call each one once
-									# (so if there are two subclasses of a base that base's functions won't get called twice)
-									if limit:
-										classes = limit
-										if shared_globals.runMode == shared_globals.RunMode.GenerateSolution:
-											for cls in _classTrackr.classes:
-												if cls in shared_globals.allGeneratorTools:
-													classes.add(cls)
-									else:
-										classes = _classTrackr.classes
-									for cls in classes:
-										if hasattr(cls, name):
-											# Have to use __dict__ instead of getattr() because otherwise we can't identify static methods
-											# See http://stackoverflow.com/questions/14187973/python3-check-if-method-is-static
-											func = None
-											for cls2 in cls.mro():
-												if name in cls2.__dict__:
-													func = cls2.__dict__[name]
-													break
-											assert func is not None, "this shouldn't happen"
-											if func not in functions or issubclass(functions[func], cls):
-												functions[func] = cls
+							# For public variables we want to return a wrapper function that calls all
+							# matching functions. This should definitely be a function. If it's not a function,
+							# things will not work.
+							def _runMultiFunc(*args, **kwargs):
+								functions = {}
 
-									# Having collected all functions, iterate and call them
-									for func, cls in functions.items():
-										with Use(cls):
-											func.__get__(cls)(*args, **kwargs)
-
-								hasNonFunc = False
+								# Iterate through all classes and collect functions that match this name
+								# We'll keep a list of all the functions that match, but only call each matching
+								# function once. And when we call it we'll use the most base class we find that
+								# has it - which should be the one that defined it - and only call each one once
+								# (so if there are two subclasses of a base that base's functions won't get called twice)
 								if limit:
 									classes = limit
+									if shared_globals.runMode == shared_globals.RunMode.GenerateSolution:
+										for cls in _classTrackr.classes:
+											if cls in shared_globals.allGeneratorTools:
+												classes.add(cls)
 								else:
 									classes = _classTrackr.classes
-								found = False
 								for cls in classes:
 									if hasattr(cls, name):
 										# Have to use __dict__ instead of getattr() because otherwise we can't identify static methods
 										# See http://stackoverflow.com/questions/14187973/python3-check-if-method-is-static
 										func = None
-										found = True
 										for cls2 in cls.mro():
 											if name in cls2.__dict__:
 												func = cls2.__dict__[name]
 												break
-
 										assert func is not None, "this shouldn't happen"
-										if isinstance(func, (types.FunctionType, types.MethodType, property)):
-											raise InvalidFunctionCall(
-												"Function call is invalid. '{}' is an instance method and is being called on a toolchain with more than one tool in its view. "
-												"Only staticmethods and classmethods are automatically bundled, non-static methods must be called with toolchain.Tool(FooTool).BarMethod()"
-												.format(name)
+										if func not in functions or issubclass(functions[func], cls):
+											functions[func] = cls
+
+								# Having collected all functions, iterate and call them
+								for func, cls in functions.items():
+									with Use(cls):
+										func.__get__(cls)(*args, **kwargs)
+
+							hasNonFunc = False
+							if limit:
+								classes = limit
+							else:
+								classes = _classTrackr.classes
+							found = False
+							for cls in classes:
+								if hasattr(cls, name):
+									# Have to use __dict__ instead of getattr() because otherwise we can't identify static methods
+									# See http://stackoverflow.com/questions/14187973/python3-check-if-method-is-static
+									func = None
+									found = True
+									for cls2 in cls.mro():
+										if name in cls2.__dict__:
+											func = cls2.__dict__[name]
+											break
+
+									assert func is not None, "this shouldn't happen"
+									if isinstance(func, (types.FunctionType, types.MethodType, property)):
+										raise InvalidFunctionCall(
+											"Function call is invalid. '{}' is an instance method and is being called on a toolchain with more than one tool in its view. "
+											"Only staticmethods and classmethods are automatically bundled, non-static methods must be called with toolchain.Tool(FooTool).BarMethod()"
+											.format(name)
+										)
+									if not isinstance(func, staticmethod) and not isinstance(func, classmethod):
+										hasNonFunc = True
+
+							if hasNonFunc:
+								values = {}
+								for cls in classes:
+									if hasattr(cls, name):
+										# Have to use __dict__ instead of getattr() because otherwise we can't identify static methods
+										# See http://stackoverflow.com/questions/14187973/python3-check-if-method-is-static
+										val = None
+										clsContainingVal = None
+										for cls2 in cls.mro():
+											if name in cls2.__dict__:
+												val = cls2.__dict__[name]
+												clsContainingVal = cls2
+												break
+										assert val is not None, "this shouldn't happen"
+										if clsContainingVal in values:
+											continue
+										if values:
+											raise AttributeError(
+												"Toolchain attribute {} is ambiguous (exists on multiple tools). Try accessing on the class directly, or through toolchain.Tool(class)".format(name)
 											)
-										elif not isinstance(func, staticmethod) and not isinstance(func, classmethod):
-											hasNonFunc = True
+										values[clsContainingVal] = val
+								return values.popitem()[1]
 
-								if hasNonFunc:
-									values = {}
-									for cls in classes:
-										if hasattr(cls, name):
-											# Have to use __dict__ instead of getattr() because otherwise we can't identify static methods
-											# See http://stackoverflow.com/questions/14187973/python3-check-if-method-is-static
-											val = None
-											clsContainingVal = None
-											for cls2 in cls.mro():
-												if name in cls2.__dict__:
-													val = cls2.__dict__[name]
-													clsContainingVal = cls2
-													break
-											assert val is not None, "this shouldn't happen"
-											if clsContainingVal in values:
-												continue
-											if values:
-												raise AttributeError(
-													"Toolchain attribute {} is ambiguous (exists on multiple tools). Try accessing on the class directly, or through toolchain.Tool(class)".format(name)
-												)
-											values[clsContainingVal] = val
-									return values.popitem()[1]
+							# Finding one tool without this function present on it is not an error.
+							# However, if no tools had this function, that is an error - let python internals
+							# throw us an AttributeError
+							if not found:
+								return object.__getattribute__(self, name)
 
-								# Finding one tool without this function present on it is not an error.
-								# However, if no tools had this function, that is an error - let python internals
-								# throw us an AttributeError
-								if not found:
-									return object.__getattribute__(self, name)
-
-								return _runMultiFunc
+							return _runMultiFunc
 
 			with perf_timer.PerfTimer("Final toolchain creation"):
 				return type(PlatformString("Toolchain"), classes, dict(ToolchainTemplate.__dict__))()
@@ -1042,7 +1065,9 @@ class Toolchain(object):
 	@TypeChecked(tool=(_typeType, _classType))
 	def DeactivateTool(self, tool):
 		"""
-		Remove the specified tool from the active tool list
+		Remove the specified tool from the active tool list. This is used internally when processing
+		null tools to ensure they don't get processed multiple times. You should NOT use this in a
+		makefile - instead, you should use RemoveTool
 
 		:param tool: tool to remove
 		:type tool: type
@@ -1121,6 +1146,18 @@ class Toolchain(object):
 		Add a new tool to the toolchain. This can only be used by a toolchain initialized with
 		runInit = False to add that tool to the static method resolution; a toolchain initialized
 		with runInit = True is finalized and cannot have new tools added to it
+
+		:param tool: Class inheriting from Tool
+		:type tool: type
+		"""
+		pass
+
+	@TypeChecked(tool=(_typeType, _classType))
+	def RemoveTool(self, tool):
+		"""
+		Removes a tool from the toolchain. This can be used in a makefile to remove tools within
+		certain contexts, such as on a specific platform, or to remove default tools, such as
+		the built-in C++ linker tools.
 
 		:param tool: Class inheriting from Tool
 		:type tool: type
@@ -1360,6 +1397,13 @@ class TestToolchainMixin(testcase.TestCase):
 			derived1StaticInitialized=1,
 			derived2StaticInitialized=1,
 		)
+
+	def assertUnchanged(self):
+		"""Assert that the state dict has not changed"""
+		#Set the expected changes on our expected state and assert that the changed expected state
+		#(including the previous values in that state) matches the actual state
+		actualState = {key: val for key, val in self._sharedLocals.__dict__.items() if not key.startswith("_")}
+		self.assertEqual(self.expectedState, actualState)
 
 	def assertChanged(self, **kwargs):
 		"""Assert that the listed changes (and ONLY the listed changes) have occurred in the state dict"""

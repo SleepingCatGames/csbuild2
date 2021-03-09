@@ -85,14 +85,14 @@ def TypeChecked(**argtypes):
 					if name == "_return":
 						continue
 					if name not in varNames:
-						raise TypeError("Function {} has no parameter {}".format(oldFunc.__name__, name))
+						raise TypeError("Function {} has no parameter named '{}'".format(oldFunc.__name__, name))
 
 				# Check that all the function's parameters are represented - for type checking, this is just a warning if they're not
 				for name in varNames:
 					if name == "self":
 						continue
 					if name not in argtypes:
-						warnings.warn("Function {}: Parameter {} has no type assigned (use 'object' to accept all argtypes)".format(oldFunc.__name__, name))
+						warnings.warn("Function {}: Parameter '{}' has no type assigned (use 'object' to accept all argtypes)".format(oldFunc.__name__, name))
 
 				oldFunc.__types__ = argtypes
 				oldFunc.__varNames__ = varNames
@@ -230,12 +230,11 @@ def Overload(**argtypes):
 					for i, name in enumerate(func.__varNames__):
 						argtype = func.__types__.get(name)
 
-						elem = NOT_SET
 						# pick the correct matching passed-in argument
 						if i < len(args):
 							elem = args[i]
-						elif name in kwargs:
-							elem = kwargs[name]
+						else:
+							elem = kwargs.get(name, NOT_SET)
 
 						# If the specified argument type is object, everything matches at the lowest priority
 						if argtype is object:
@@ -296,8 +295,8 @@ def Overload(**argtypes):
 						elif result != returntype:
 							raise TypeError("Function {} returned invalid return value {}; expected {}".format(oldFunc.__name__, type(result), returntype))
 					return result
-				else:
-					raise TypeError("No overload of {} found that matches the given arguments: {} {}".format(oldFunc.__name__, args if args else "", kwargs if kwargs else ""))
+
+				raise TypeError("No overload of {} found that matches the given arguments: {} {}".format(oldFunc.__name__, args if args else "", kwargs if kwargs else ""))
 
 			# Back to the outer wrapper now! Everything from here down only happens once per instance of the decorator.
 			# Create a persistent overload list as a part of /this/ function
@@ -498,7 +497,7 @@ class TestTypeCheck(testcase.TestCase):
 
 	def testOldAndNewClasses(self):
 		"""Test that both old-style and new-style classes are accepted and work properly"""
-		class _oldClass:  # pylint: disable=old-style-class
+		class _oldClass: # pylint: disable=bad-option-value,old-style-class,no-init
 			pass
 
 		class _newClass(object):
