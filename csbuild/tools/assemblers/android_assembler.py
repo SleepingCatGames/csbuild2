@@ -19,62 +19,64 @@
 # SOFTWARE.
 
 """
-.. module:: psvita_cpp_compiler
-	:synopsis: Implementation of the PSVita C/C++ compiler tool.
+.. module:: android_assembler
+	:synopsis: Android assember tool
 
 .. moduleauthor:: Zoe Bare
 """
 
 from __future__ import unicode_literals, division, print_function
 
+import csbuild
 import os
 
-from .cpp_compiler_base import CppCompilerBase
-
-from ..common.sony_tool_base import PsVitaBaseTool
-from ..common.tool_traits import HasDebugLevel, HasOptimizationLevel
+from .assembler_base import AssemblerBase
+from ..common.android_tool_base import AndroidToolBase
 from ... import log
 from ..._utils import response_file, shared_globals
 
-DebugLevel = HasDebugLevel.DebugLevel
-OptimizationLevel = HasOptimizationLevel.OptimizationLevel
-
-class PsVitaCppCompiler(PsVitaBaseTool, CppCompilerBase):
+class AndroidAssembler(AndroidToolBase, AssemblerBase):
 	"""
-	PSVita C/C++ compiler tool implementation.
+	Android assembler implementation
 	"""
-	supportedPlatforms = { "Windows" }
-	supportedArchitectures = { "arm" }
-	outputFiles = { ".o" }
+	supportedArchitectures = AndroidToolBase.supportedArchitectures
+	inputFiles={".s", ".S"}
+	outputFiles = {".o"}
 
 	def __init__(self, projectSettings):
-		PsVitaBaseTool.__init__(self, projectSettings)
-		CppCompilerBase.__init__(self, projectSettings)
-
+		AndroidToolBase.__init__(self, projectSettings)
+		AssemblerBase.__init__(self, projectSettings)
 
 	####################################################################################################################
 	### Methods implemented from base classes
 	####################################################################################################################
 
 	def SetupForProject(self, project):
-		PsVitaBaseTool.SetupForProject(self, project)
-		CppCompilerBase.SetupForProject(self, project)
+		"""
+		Run project setup, if any, before building the project, but after all dependencies have been resolved.
+
+		:param project: project being set up
+		:type project: csbuild._build.project.Project
+		"""
+		AndroidToolBase.SetupForProject(self, project)
+		AssemblerBase.SetupForProject(self, project)
 
 	def _getOutputFiles(self, project, inputFile):
 		intDirPath = project.GetIntermediateDirectory(inputFile)
 		filename = os.path.splitext(os.path.basename(inputFile.filename))[0] + ".o"
 		return tuple({ os.path.join(intDirPath, filename) })
 
-	def _getCommand(self, project, inputFile, isCpp):
-		cmdExe = self._getComplierName()
-		cmd = self._getCustomArgs(isCpp) \
-			+ self._getOptimizationArgs() \
-			+ self._getDebugArgs() \
-			+ self._getLanguageStandardArgs(isCpp) \
+	def _getCommand(self, project, inputFile):
+		cmd = self._getInputFileArgs(inputFile) \
+			+ self._getDefaultArgs(project) \
+			+ self._getCustomArgs() \
+			+ self._getOutputFileArgs(project, inputFile) \
 			+ self._getPreprocessorArgs() \
 			+ self._getIncludeDirectoryArgs() \
-			+ self._getOutputFileArgs(project, inputFile) \
-			+ self._getInputFileArgs(inputFile)
+			+ self._getArchitectureArgs()
+
+		if self._androidInfo.isBuggyClang:
+			return [self._androidInfo.clangExePath] + cmd
 
 		inputFileBasename = os.path.basename(inputFile.filename)
 		responseFile = response_file.ResponseFile(project, "{}-{}".format(inputFile.uniqueDirectoryId, inputFileBasename), cmd)
@@ -82,71 +84,46 @@ class PsVitaCppCompiler(PsVitaBaseTool, CppCompilerBase):
 		if shared_globals.showCommands:
 			log.Command("ResponseFile: {}\n\t{}".format(responseFile.filePath, responseFile.AsString()))
 
-		return [cmdExe, "@{}".format(responseFile.filePath)]
-
+		return [self._androidInfo.clangExePath, "@{}".format(responseFile.filePath)]
 
 	####################################################################################################################
 	### Internal methods
 	####################################################################################################################
 
-	def _getComplierName(self):
-		binPath = os.path.join(self._psVitaSdkPath, "host_tools", "build", "bin")
-		exeName = "psp2snc.exe"
+	def _getDefaultArgs(self, project):
+		args = [
+			"-funwind-tables",
+			"-fstack-protector",
+			"-fno-omit-frame-pointer",
+			"-fno-strict-aliasing",
+			"-fno-short-enums",
+			"-Wno-unused-command-line-argument",
+			"-Wa,--noexecstack",
+		]
+		if project.projectType == csbuild.ProjectType.SharedLibrary:
+			args.append("-fPIC")
+		return args
 
-		return os.path.join(binPath, exeName)
-
-	def _getCustomArgs(self, isCpp):
-		return self._globalFlags + (self._cxxFlags if isCpp else self._cFlags)
+	def _getCustomArgs(self):
+		return self._asmFlags
 
 	def _getInputFileArgs(self, inputFile):
-		return ["-c", inputFile.filename]
+		return ["-c", "{}".format(inputFile.filename)]
 
 	def _getOutputFileArgs(self, project, inputFile):
 		outputFiles = self._getOutputFiles(project, inputFile)
-		return ["-o", outputFiles[0]]
+		return ["-o", "{}".format(outputFiles[0])]
 
 	def _getPreprocessorArgs(self):
-		args = []
+		args = self._getDefaultAndroidDefines()
 		args.extend(["-D{}".format(d) for d in self._defines])
 		args.extend(["-U{}".format(u) for u in self._undefines])
 		return args
 
 	def _getIncludeDirectoryArgs(self):
-		args = []
-
-		for dirPath in self._includeDirectories:
-			args.extend([
-				"-I{}".format(os.path.abspath(dirPath)),
-			])
-
-		# Add the PSVita system include directories.
-		args.extend([
-			"-I{}".format(os.path.join(self._psVitaSdkPath, "target", "include")),
-			"-I{}".format(os.path.join(self._psVitaSdkPath, "target", "include_common")),
-		])
-
+		args = ["-I{}".format(d) for d in self._includeDirectories]
+		args.extend(["-I{}".format(d) for d in self._androidInfo.sysIncPaths])
 		return args
 
-	def _getDebugArgs(self):
-		if self._debugLevel != DebugLevel.Disabled:
-			return ["-g"]
-		return []
-
-	def _getOptimizationArgs(self):
-		arg = {
-			OptimizationLevel.Size: "s",
-			OptimizationLevel.Speed: "d",
-			OptimizationLevel.Max: "3",
-		}
-		return ["-O{}".format(arg.get(self._optLevel, "0"))]
-
-	def _getLanguageStandardArgs(self, isSourceCpp):
-		standard = self._cxxStandard if isSourceCpp else self._ccStandard
-
-		if isSourceCpp:
-			# The SNC compiler only supports the c++03 and c++11 standard, but they have non-standard names.
-			assert self._cxxStandard in { "c++03", "c++11" }, "Unsupported C++ standard: {}".format(self._cxxStandard)
-			standard = "cpp{}".format(self._cxxStandard[3:])
-
-		arg = "-Xstd={}".format(standard) if standard else None
-		return [arg]
+	def _getArchitectureArgs(self):
+		return ["-target", self._androidInfo.targetTripleName]
